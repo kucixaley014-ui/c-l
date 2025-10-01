@@ -1,4 +1,4 @@
-name: Build Android APK (MAUI without XAML)
+name: Build Android APK
 
 on:
   push:
@@ -10,25 +10,20 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # Клонируем репозиторий
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Устанавливаем .NET
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '7.0.x'
 
-      # Восстанавливаем зависимости
       - name: Restore dependencies
-        run: dotnet restore MyMauiApp\MyMauiApp.sln
+        run: dotnet restore ./MyMauiApp.csproj
 
-      # Строим APK без XAML
       - name: Build APK
-        run: dotnet publish MyMauiApp\MyMauiApp.csproj -c Release -f net7.0-android -o .\output
+        run: dotnet publish ./MyMauiApp.csproj -c Release -f net7.0-android -o .\output
 
-      # Загружаем APK как артефакт
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
