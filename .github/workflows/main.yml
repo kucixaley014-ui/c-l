@@ -1,11 +1,11 @@
-name: Build Android APK from scratch
+name: Build Android APK on Windows
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
     - name: Setup .NET
@@ -17,7 +17,6 @@ jobs:
       run: |
         dotnet new maui -n MyMauiApp
         cd MyMauiApp
-        # Минимальный код MainPage.xaml.cs
         echo "namespace MyMauiApp; using Microsoft.Maui.Controls; public partial class MainPage : ContentPage { public MainPage() { InitializeComponent(); Content = new Label { Text = \"Hello, MAUI Android!\", VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center }; } }" > MyMauiApp/MainPage.xaml.cs
         cd ..
 
