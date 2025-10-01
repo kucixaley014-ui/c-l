@@ -13,19 +13,11 @@ jobs:
       with:
         dotnet-version: '7.0.x'
 
-    - name: Install Android SDK
-      uses: reactivecircus/android-emulator-runner@v2
-      with:
-        api-level: 33
-        target: default
-        arch: x86_64
-        force-avd-creation: true
-
     - name: Create MAUI project
       run: |
         dotnet new maui -n MyMauiApp
         cd MyMauiApp
-        # Перезаписываем MainPage.xaml.cs минимальным кодом
+        # Минимальный код MainPage.xaml.cs
         echo "namespace MyMauiApp; using Microsoft.Maui.Controls; public partial class MainPage : ContentPage { public MainPage() { InitializeComponent(); Content = new Label { Text = \"Hello, MAUI Android!\", VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center }; } }" > MyMauiApp/MainPage.xaml.cs
         cd ..
 
