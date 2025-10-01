@@ -1,45 +1,53 @@
-name: Flask Task Client
+name: Python Code Executor
 
 on:
   workflow_dispatch:
 
 jobs:
-  flask-client:
+  python-task-runner:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: "3.11"
-      - run: |
+
+      - name: Install dependencies
+        run: |
           pip install requests
-      - run: |
-          cat > client.py << 'EOF'
+
+      - name: Run Task Loop
+        run: |
+          cat > runner.py << 'EOF'
           import requests
           import time
 
-          server_url = "https://testl.pythonanywhere.com"
+          SERVER_URL = "https://testl.pythonanywhere.com"
 
-          tasks = ["Action задача 1", "Action задача 2"]
-          task_ids = []
+          while True:
+              # Получаем новую задачу
+              r = requests.get(f"{SERVER_URL}/get_task")
+              task = r.json()
+              task_id = task.get("task_id")
+              code = task.get("code")
 
-          for task in tasks:
-              r = requests.post(f"{server_url}/add_task", json={"task": task})
-              task_ids.append(r.json()["task_id"])
-              print(f"Добавлена задача {task} с id {r.json()['task_id']}")
+              if task_id:
+                  print(f"Найдена задача {task_id}, выполняем...")
+                  try:
+                      # Локально выполняем код Python
+                      local_vars = {}
+                      exec(code, {}, local_vars)
+                      result = str(local_vars)
+                  except Exception as e:
+                      result = f"Ошибка: {e}"
 
-          try:
-              while task_ids:
-                  for task_id in task_ids[:]:
-                      requests.post(f"{server_url}/heartbeat/{task_id}")
-                      r = requests.get(f"{server_url}/get_result/{task_id}")
-                      data = r.json()
-                      if "result" in data:
-                          print(f"Результат задачи {task_id}: {data['result']}")
-                          task_ids.remove(task_id)
-                  time.sleep(2)
-          except KeyboardInterrupt:
-              print("Клиент завершает работу")
+                  # Отправляем результат обратно
+                  requests.post(f"{SERVER_URL}/submit_result", json={"task_id": task_id, "result": result})
+                  print(f"Результат задачи {task_id} отправлен")
+              else:
+                  time.sleep(2)  # Ждём новые задачи
           EOF
 
-          python client.py
+          python runner.py
