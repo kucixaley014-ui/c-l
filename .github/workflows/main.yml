@@ -16,18 +16,41 @@ jobs:
     - name: Create MAUI project
       run: |
         dotnet new maui -n MyMauiApp
-        cd MyMauiApp
-        echo "namespace MyMauiApp; using Microsoft.Maui.Controls; public partial class MainPage : ContentPage { public MainPage() { InitializeComponent(); Content = new Label { Text = \"Hello, MAUI Android!\", VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center }; } }" > MyMauiApp/MainPage.xaml.cs
-        cd ..
+
+    - name: Replace MainPage.xaml.cs
+      run: |
+        $file = "MyMauiApp\MainPage.xaml.cs"
+        $code = @"
+using Microsoft.Maui.Controls;
+
+namespace MyMauiApp
+{
+    public partial class MainPage : ContentPage
+    {
+        public MainPage()
+        {
+            InitializeComponent();
+
+            Content = new Label
+            {
+                Text = "Hello, MAUI Android!",
+                VerticalOptions = LayoutOptions.Center,
+                HorizontalOptions = LayoutOptions.Center
+            };
+        }
+    }
+}
+"@
+        Set-Content -Path $file -Value $code
 
     - name: Restore dependencies
-      run: dotnet restore MyMauiApp/MyMauiApp.sln
+      run: dotnet restore MyMauiApp\MyMauiApp.sln
 
     - name: Build APK
-      run: dotnet publish MyMauiApp/MyMauiApp.csproj -c Release -f net7.0-android -o ./output
+      run: dotnet publish MyMauiApp\MyMauiApp.csproj -c Release -f net7.0-android -o .\output
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: apk
-        path: ./output/*.apk
+        path: .\output\*.apk
