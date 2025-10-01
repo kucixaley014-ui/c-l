@@ -10,30 +10,40 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      # Клонируем репозиторий
       - uses: actions/checkout@v3
 
-      # Устанавливаем точную версию .NET 7 SDK
+      # Устанавливаем .NET 7 SDK и указываем путь DOTNET_ROOT
       - name: Setup .NET 7 SDK
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '7.0.410'
+        env:
+          DOTNET_ROOT: C:\Program Files\dotnet
 
-      # Устанавливаем MAUI workload для Android
+      # Устанавливаем необходимые MAUI workloads
       - name: Install MAUI workloads
         run: |
           dotnet workload install maui
           dotnet workload install android
+        env:
+          DOTNET_ROOT: C:\Program Files\dotnet
 
       # Восстанавливаем зависимости
       - name: Restore dependencies
         run: dotnet restore ./MyMauiApp.csproj
+        env:
+          DOTNET_ROOT: C:\Program Files\dotnet
 
-      # Собираем APK
+      # Строим APK
       - name: Build APK
         run: dotnet publish ./MyMauiApp.csproj -c Release -f net7.0-android -o .\output
+        env:
+          DOTNET_ROOT: C:\Program Files\dotnet
 
       # Загружаем APK как артефакт
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: apk
           path: .\output\*.apk
