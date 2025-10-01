@@ -1,6 +1,8 @@
-name: Build Android APK on Windows
+name: Build Android APK (MAUI without XAML)
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -8,49 +10,27 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: '7.0.x'
+      # Клонируем репозиторий
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Create MAUI project
-      run: |
-        dotnet new maui -n MyMauiApp
+      # Устанавливаем .NET
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '7.0.x'
 
-    - name: Replace MainPage.xaml.cs
-      run: |
-        $file = "MyMauiApp\MainPage.xaml.cs"
-        $code = @"
-using Microsoft.Maui.Controls;
+      # Восстанавливаем зависимости
+      - name: Restore dependencies
+        run: dotnet restore MyMauiApp\MyMauiApp.sln
 
-namespace MyMauiApp
-{
-    public partial class MainPage : ContentPage
-    {
-        public MainPage()
-        {
-            InitializeComponent();
+      # Строим APK без XAML
+      - name: Build APK
+        run: dotnet publish MyMauiApp\MyMauiApp.csproj -c Release -f net7.0-android -o .\output
 
-            Content = new Label
-            {
-                Text = "Hello, MAUI Android!",
-                VerticalOptions = LayoutOptions.Center,
-                HorizontalOptions = LayoutOptions.Center
-            };
-        }
-    }
-}
-"@
-        Set-Content -Path $file -Value $code
-
-    - name: Restore dependencies
-      run: dotnet restore MyMauiApp\MyMauiApp.sln
-
-    - name: Build APK
-      run: dotnet publish MyMauiApp\MyMauiApp.csproj -c Release -f net7.0-android -o .\output
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: apk
-        path: .\output\*.apk
+      # Загружаем APK как артефакт
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: .\output\*.apk
