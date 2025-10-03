@@ -1,86 +1,145 @@
-name: Generated APK AAB (Upload - Create Artifact To Github Action)
-
-env:
-  # The name of the main module repository
-  main_project_module: app
-
-  # The name of the Play Store
-  playstore_name: Frogobox ID
+name: Flutter APK Build
 
 on:
-
+  workflow_dispatch:  # Можно запускать вручную
   push:
     branches:
-      - 'release/**'
-
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+      - main
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      # Set Current Date As Env Variable
-      - name: Set current date as env variable
-        run: echo "date_today=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: "stable"
 
-      # Set Repository Name As Env Variable
-      - name: Set repository name as env variable
-        run: echo "repository_name=$(echo '${{ github.repository }}' | awk -F '/' '{print $2}')" >> $GITHUB_ENV
+    - name: Create Flutter project
+      run: |
+        flutter create audio_recorder_app
+        cd audio_recorder_app
+        # добавляем необходимые зависимости
+        echo 'dependencies:
+  flutter:
+    sdk: flutter
+  path_provider: ^2.0.14
+  permission_handler: ^10.4.1
+  flutter_sound: ^9.3.2' >> pubspec.yaml
+        flutter pub get
 
-      - name: Set Up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu' # See 'Supported distributions' for available options
-          java-version: '17'
-          cache: 'gradle'
+    - name: Add main.dart
+      run: |
+        cd audio_recorder_app/lib
+        cat > main.dart <<'EOF'
+        import 'package:flutter/material.dart';
+        import 'package:flutter_sound/flutter_sound.dart';
+        import 'package:permission_handler/permission_handler.dart';
+        import 'package:path_provider/path_provider.dart';
+        import 'dart:io';
 
-      - name: Change wrapper permissions
-        run: chmod +x ./gradlew
+        void main() => runApp(MyApp());
 
-      # Run Tests Build
-      - name: Run gradle tests
-        run: ./gradlew test
+        class MyApp extends StatelessWidget {
+          @override
+          Widget build(BuildContext context) {
+            return MaterialApp(
+              home: RecorderPage(),
+            );
+          }
+        }
 
-      # Run Build Project
-      - name: Build gradle project
-        run: ./gradlew build
+        class RecorderPage extends StatefulWidget {
+          @override
+          _RecorderPageState createState() => _RecorderPageState();
+        }
 
-      # Create APK Debug
-      - name: Build apk debug project (APK) - ${{ env.main_project_module }} module
-        run: ./gradlew assembleDebug
+        class _RecorderPageState extends State<RecorderPage> {
+          final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
+          final FlutterSoundPlayer _player = FlutterSoundPlayer();
+          bool _isRecording = false;
+          bool _isPlaying = false;
+          String? _filePath;
 
-      # Create APK Release
-      - name: Build apk release project (APK) - ${{ env.main_project_module }} module
-        run: ./gradlew assemble
+          @override
+          void initState() {
+            super.initState();
+            _init();
+          }
 
-      # Create Bundle AAB Release
-      # Noted for main module build [main_project_module]:bundleRelease
-      - name: Build app bundle release (AAB) - ${{ env.main_project_module }} module
-        run: ./gradlew ${{ env.main_project_module }}:bundleRelease
+          Future<void> _init() async {
+            await _recorder.openRecorder();
+            await _player.openPlayer();
+            _filePath = '${(await getTemporaryDirectory()).path}/audio.aac';
+          }
 
-      # Upload Artifact Build
-      # Noted For Output [main_project_module]/build/outputs/apk/debug/
-      - name: Upload APK Debug - ${{ env.repository_name }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.date_today }} - ${{ env.playstore_name }} - ${{ env.repository_name }} - APK(s) debug generated
-          path: ${{ env.main_project_module }}/build/outputs/apk/debug/
+          Future<void> _startRecording() async {
+            if (await Permission.microphone.request().isGranted) {
+              await _recorder.startRecorder(toFile: _filePath);
+              setState(() => _isRecording = true);
+            }
+          }
 
-      # Noted For Output [main_project_module]/build/outputs/apk/release/
-      - name: Upload APK Release - ${{ env.repository_name }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.date_today }} - ${{ env.playstore_name }} - ${{ env.repository_name }} - APK(s) release generated
-          path: ${{ env.main_project_module }}/build/outputs/apk/release/
+          Future<void> _stopRecording() async {
+            await _recorder.stopRecorder();
+            setState(() => _isRecording = false);
+          }
 
-      # Noted For Output [main_project_module]/build/outputs/bundle/release/
-      - name: Upload AAB (App Bundle) Release - ${{ env.repository_name }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.date_today }} - ${{ env.playstore_name }} - ${{ env.repository_name }} - App bundle(s) AAB release generated
-          path: ${{ env.main_project_module }}/build/outputs/bundle/release/
+          Future<void> _playAudio() async {
+            await _player.startPlayer(fromURI: _filePath, whenFinished: () {
+              setState(() => _isPlaying = false);
+            });
+            setState(() => _isPlaying = true);
+          }
+
+          Future<void> _stopAudio() async {
+            await _player.stopPlayer();
+            setState(() => _isPlaying = false);
+          }
+
+          @override
+          void dispose() {
+            _recorder.closeRecorder();
+            _player.closePlayer();
+            super.dispose();
+          }
+
+          @override
+          Widget build(BuildContext context) {
+            return Scaffold(
+              appBar: AppBar(title: Text("Audio Recorder")),
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton(
+                      onPressed: _isRecording ? _stopRecording : _startRecording,
+                      child: Text(_isRecording ? "Stop Recording" : "Start Recording"),
+                    ),
+                    SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: _isPlaying ? _stopAudio : _playAudio,
+                      child: Text(_isPlaying ? "Stop Playing" : "Play Audio"),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+        }
+        EOF
+
+    - name: Build APK
+      run: |
+        cd audio_recorder_app
+        flutter build apk --release
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: app-release.apk
+        path: audio_recorder_app/build/app/outputs/flutter-apk/app-release.apk
